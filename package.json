@@ -1,6 +1,6 @@
 {
   "name": "owa-mail",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Office365 OWA mail client using Playwright session",
   "type": "module",
   "bin": {
