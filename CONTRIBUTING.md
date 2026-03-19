@@ -21,7 +21,8 @@ npm run build
 ```
 
 TypeScript ソース (`src/`) を `dist/` にコンパイルする。
-`npm install` 時に `prepare` スクリプトで自動ビルドされる。
+通常の `npm install` 時は `prepare` スクリプトで自動ビルドされる。
+`npm install --package-lock-only` のような lockfile 更新専用実行では `prepare` はスキップされる。
 
 ## 開発時の実行
 

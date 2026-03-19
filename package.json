@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
-    "prepare": "npm run build",
+    "prepare": "node scripts/prepare.mjs",
     "test": "vitest run"
   },
   "optionalDependencies": {
