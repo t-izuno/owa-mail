@@ -40,8 +40,8 @@ const formula = `class OwaMail < Formula
   def caveats
     <<~EOS
       Login requires Playwright CLI.
-      Install it separately with:
-        npm install -g @playwright/cli@latest
+      Install it with:
+        brew install playwright-cli
     EOS
   end
 

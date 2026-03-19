@@ -5,8 +5,9 @@
  * Playwright でブラウザを起動してログイン → セッションを保存。
  * 以降は保存済みセッションのクッキーで OWA service.svc を叩く。
  *
- * Install: npm install && npm install -g .
- *          npm install -g @playwright/cli@latest
+ * Install: brew tap t-izuno/homebrew-tap
+ *          brew install owa-mail
+ *          brew install playwright-cli
  *
  * Usage:
  *   owa-mail login
@@ -158,7 +159,7 @@ function findPlaywrightCli(): string {
       console.error(
         JSON.stringify({
           error: "playwright-cli が見つかりません",
-          hint: "`npm install -g @playwright/cli@latest` を実行してください",
+          hint: "`brew install playwright-cli` を実行してください",
         }, null, 2)
       );
       exit(1);
