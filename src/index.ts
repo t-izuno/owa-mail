@@ -724,8 +724,12 @@ Session: ${SESSION_PATH}
   print(result);
 }
 
-// テスト時のimportでmain()が走らないようにガード
-const isDirectRun = argv[1]?.endsWith("index.js") || argv[1]?.endsWith("index.ts");
+// Node 実行・Bun 実行・Bun compile の単一実行ファイルを同じ判定で扱う。
+const isDirectRun = (() => {
+  const meta = import.meta as ImportMeta & { main?: boolean };
+  return meta.main ?? argv[1]?.endsWith("index.js") ?? argv[1]?.endsWith("index.ts");
+})();
+
 if (isDirectRun) {
   main().catch((err: unknown) => {
     console.error(JSON.stringify({ error: String(err) }, null, 2));

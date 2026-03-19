@@ -1,5 +1,13 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
 if (process.env.npm_config_package_lock_only === "true") {
   console.log("Skipping prepare during package-lock-only install");
+  process.exit(0);
+}
+
+if (existsSync(join(import.meta.dirname, "..", "dist", "index.js"))) {
+  console.log("Skipping prepare because dist/index.js already exists");
   process.exit(0);
 }
 
@@ -18,4 +26,3 @@ child.on("exit", (code, signal) => {
   }
   process.exit(code ?? 1);
 });
-

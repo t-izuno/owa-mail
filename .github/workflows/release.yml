@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      APP_NAME: owa-mail
+      TAP_REPOSITORY: t-izuno/homebrew-tap
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: ".bun-version"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build release assets
+        env:
+          VERSION: ${{ github.event_name == 'push' && github.ref_name || 'snapshot' }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p release
+          for target in bun-darwin-x64 bun-darwin-arm64 bun-linux-x64; do
+            os="$(echo "${target}" | cut -d- -f2)"
+            arch="$(echo "${target}" | cut -d- -f3)"
+            binary_path="release/${APP_NAME}"
+            archive_path="release/${APP_NAME}_${VERSION}_${os}_${arch}.tar.gz"
+
+            rm -f "${binary_path}" "${binary_path}.exe"
+            bun build src/index.ts --compile --target="${target}" --outfile "${binary_path}"
+
+            chmod +x "${binary_path}"*
+            tar -C release -czf "${archive_path}" "${APP_NAME}"
+            shasum -a 256 "${archive_path}" > "${archive_path}.sha256"
+          done
+
+      - name: Upload snapshot artifacts
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: owa-mail-snapshot
+          path: release/*
+
+      - name: Create or update GitHub Release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release/*.tar.gz
+            release/*.sha256
+
+      - name: Generate Homebrew formula
+        if: github.event_name == 'push'
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          darwin_x64_sha="$(cut -d' ' -f1 "release/${APP_NAME}_${VERSION}_darwin_x64.tar.gz.sha256")"
+          darwin_arm64_sha="$(cut -d' ' -f1 "release/${APP_NAME}_${VERSION}_darwin_arm64.tar.gz.sha256")"
+          node scripts/generate-homebrew-formula.mjs "${VERSION}" "${darwin_x64_sha}" "${darwin_arm64_sha}" "release/${APP_NAME}.rb"
+
+      - name: Checkout Homebrew tap
+        if: github.event_name == 'push'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TAP_REPOSITORY }}
+          token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update Homebrew tap
+        if: github.event_name == 'push'
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          cp "release/${APP_NAME}.rb" "homebrew-tap/Formula/${APP_NAME}.rb"
+          cd homebrew-tap
+
+          if git diff --quiet -- "Formula/${APP_NAME}.rb"; then
+            echo "No tap update required"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "Formula/${APP_NAME}.rb"
+          git commit -m "Update ${APP_NAME} to ${VERSION}"
+          git push
