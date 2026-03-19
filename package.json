@@ -15,10 +15,12 @@
   "optionalDependencies": {
     "@playwright/cli": "^0.1.0"
   },
+  "dependencies": {
+    "typescript": "^5.4.0"
+  },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "tsx": "^4.7.0",
-    "typescript": "^5.4.0",
     "vitest": "^3.0.0"
   }
 }
