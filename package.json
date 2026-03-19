@@ -1,0 +1,24 @@
+{
+  "name": "owa-mail",
+  "version": "1.0.0",
+  "description": "Office365 OWA mail client using Playwright session",
+  "type": "module",
+  "bin": {
+    "owa-mail": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "prepare": "npm run build",
+    "test": "vitest run"
+  },
+  "optionalDependencies": {
+    "@playwright/cli": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "vitest": "^3.0.0"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//private/tmp/**)",
+      "Bash(unzip -o /Users/izuno/Desktop/office365-mail.skill -d office365-mail-extracted)",
+      "Bash(cp:*)",
+      "Skill(programming)",
+      "Bash(npx vitest:*)",
+      "Bash(npx markdownlint-cli2:*)",
+      "mcp__deepwiki__ask_question"
+    ]
+  }
+}
