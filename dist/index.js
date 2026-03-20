@@ -5,8 +5,9 @@
  * Playwright でブラウザを起動してログイン → セッションを保存。
  * 以降は保存済みセッションのクッキーで OWA service.svc を叩く。
  *
- * Install: npm install && npm install -g .
- *          npm install -g @playwright/cli@latest
+ * Install: brew tap t-izuno/homebrew-tap
+ *          brew install owa-mail
+ *          brew install playwright-cli
  *
  * Usage:
  *   owa-mail login
@@ -21,7 +22,7 @@ import { basename, join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { argv, exit, stdout } from "node:process";
+import { argv, exit, stdin, stdout } from "node:process";
 // ── 定数 ─────────────────────────────────────────────────────────────────────
 const OWA_BASE = "https://outlook.office.com/owa/";
 const SERVICE_URL = "https://outlook.office.com/owa/service.svc";
@@ -41,7 +42,7 @@ function findPlaywrightCli() {
         catch {
             console.error(JSON.stringify({
                 error: "playwright-cli が見つかりません",
-                hint: "`npm install -g @playwright/cli@latest` を実行してください",
+                hint: "`brew install playwright-cli` を実行してください",
             }, null, 2));
             exit(1);
         }
@@ -55,15 +56,43 @@ function runPlaywrightCli(bin, args) {
         timeout: 300_000,
     });
 }
-function login() {
+const LOGIN_SESSION_NAME = "owa-mail-login";
+export function hasOwaCanaryCookie(session) {
+    return session.cookies.some((c) => c.name === "X-OWA-CANARY" && c.domain.includes("outlook.office.com"));
+}
+function waitForEnter() {
+    return new Promise((resolve) => {
+        stdin.resume();
+        stdin.setEncoding("utf8");
+        stdin.once("data", () => {
+            stdin.pause();
+            resolve();
+        });
+    });
+}
+async function login() {
     const bin = findPlaywrightCli();
     console.error("ブラウザを起動します。Office365 にログインしてください。");
-    // ブラウザを開いて OWA にアクセス
-    runPlaywrightCli(bin, ["open", OWA_BASE, "--headed"]);
-    console.error("ログイン後、セッションを保存します...");
-    // セッション保存
     mkdirSync(join(homedir(), ".config", "owa-mail"), { recursive: true });
-    runPlaywrightCli(bin, ["state-save", SESSION_PATH]);
+    runPlaywrightCli(bin, [
+        "-s=" + LOGIN_SESSION_NAME,
+        "open",
+        OWA_BASE,
+        "--headed",
+        "--persistent",
+    ]);
+    console.error("OWA のメール画面が表示されたら Enter を押してください。");
+    await waitForEnter();
+    runPlaywrightCli(bin, ["-s=" + LOGIN_SESSION_NAME, "state-save", SESSION_PATH]);
+    const session = JSON.parse(readFileSync(SESSION_PATH, "utf8"));
+    if (!hasOwaCanaryCookie(session)) {
+        console.error(JSON.stringify({
+            error: "X-OWA-CANARY が見つかりません。ログイン完了前に保存した可能性があります",
+            hint: "OWA のメール画面が完全に表示された後に `owa-mail login` をやり直してください",
+        }, null, 2));
+        exit(1);
+    }
+    runPlaywrightCli(bin, ["-s=" + LOGIN_SESSION_NAME, "close"]);
     console.error(`セッションを保存しました: ${SESSION_PATH}`);
 }
 // ── OWA クライアント ──────────────────────────────────────────────────────────
@@ -85,7 +114,7 @@ function buildHeaders(session, action) {
         .map((c) => `${c.name}=${c.value}`)
         .join("; ");
     const canary = session.cookies.find((c) => c.name === "X-OWA-CANARY" && c.domain.includes("outlook.office.com"))?.value;
-    if (!canary) {
+    if (!canary || !hasOwaCanaryCookie(session)) {
         console.error(JSON.stringify({
             error: "X-OWA-CANARY が見つかりません。セッションが期限切れの可能性があります",
             hint: "`owa-mail login` で再ログインしてください",

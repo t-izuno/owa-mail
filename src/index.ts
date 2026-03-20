@@ -23,7 +23,7 @@ import { basename, join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { argv, exit, stdout } from "node:process";
+import { argv, exit, stdin, stdout } from "node:process";
 
 // ── OWA レスポンス型定義 ─────────────────────────────────────────────────────
 
@@ -176,19 +176,56 @@ function runPlaywrightCli(bin: string, args: string[]): string {
   });
 }
 
-function login(): void {
+const LOGIN_SESSION_NAME = "owa-mail-login";
+
+export function hasOwaCanaryCookie(session: Session): boolean {
+  return session.cookies.some(
+    (c) => c.name === "X-OWA-CANARY" && c.domain.includes("outlook.office.com")
+  );
+}
+
+function waitForEnter(): Promise<void> {
+  return new Promise((resolve) => {
+    stdin.resume();
+    stdin.setEncoding("utf8");
+    stdin.once("data", () => {
+      stdin.pause();
+      resolve();
+    });
+  });
+}
+
+async function login(): Promise<void> {
   const bin = findPlaywrightCli();
 
   console.error("ブラウザを起動します。Office365 にログインしてください。");
 
-  // ブラウザを開いて OWA にアクセス
-  runPlaywrightCli(bin, ["open", OWA_BASE, "--headed"]);
-
-  console.error("ログイン後、セッションを保存します...");
-
-  // セッション保存
   mkdirSync(join(homedir(), ".config", "owa-mail"), { recursive: true });
-  runPlaywrightCli(bin, ["state-save", SESSION_PATH]);
+
+  runPlaywrightCli(bin, [
+    "-s=" + LOGIN_SESSION_NAME,
+    "open",
+    OWA_BASE,
+    "--headed",
+    "--persistent",
+  ]);
+
+  console.error("OWA のメール画面が表示されたら Enter を押してください。");
+  await waitForEnter();
+  runPlaywrightCli(bin, ["-s=" + LOGIN_SESSION_NAME, "state-save", SESSION_PATH]);
+
+  const session = JSON.parse(readFileSync(SESSION_PATH, "utf8")) as Session;
+  if (!hasOwaCanaryCookie(session)) {
+    console.error(
+      JSON.stringify({
+        error: "X-OWA-CANARY が見つかりません。ログイン完了前に保存した可能性があります",
+        hint: "OWA のメール画面が完全に表示された後に `owa-mail login` をやり直してください",
+      }, null, 2)
+    );
+    exit(1);
+  }
+
+  runPlaywrightCli(bin, ["-s=" + LOGIN_SESSION_NAME, "close"]);
 
   console.error(`セッションを保存しました: ${SESSION_PATH}`);
 }
@@ -219,7 +256,7 @@ function buildHeaders(session: Session, action: string): HeadersInit {
     (c) => c.name === "X-OWA-CANARY" && c.domain.includes("outlook.office.com")
   )?.value;
 
-  if (!canary) {
+  if (!canary || !hasOwaCanaryCookie(session)) {
     console.error(
       JSON.stringify({
         error: "X-OWA-CANARY が見つかりません。セッションが期限切れの可能性があります",
